@@ -1,0 +1,49 @@
+name: Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x]
+    steps:
+      - name: Checkout Latest Repo
+        uses: actions/checkout@v2
+
+      - name: Generate Deployment Package
+        run: zip -r aws-eb-test.zip * -x "**.git**"
+
+      - name: Get timestamp
+        uses: gerred/actions/current-time@master
+        id: current-time
+
+      - name: Run string replace
+        uses: frabert/replace-string-action@master
+        id: format-time
+        with:
+          # replaces '[:\.]+' in the timestamp with '-'
+          pattern: '[:\.]+'
+          string: "${{ steps.current-time.outputs.time }}"
+          replace-with: '-'
+          flags: 'g'
+
+      - name: Deploy to EB
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          #  input the credentials you used to setup AWS CLI and credentials for the application environment
+          aws_access_key: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          aws_secret_key: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          application_name: scoram
+          environment_name: aws-eb-test
+          version_label: "app-${{ steps.format-time.outputs.replaced }}"
+          region: eu-central-1
+          deployment_package: aws-eb-test.zip
+
+      - name: Deployed!
+        run: echo App deployed to ELB
